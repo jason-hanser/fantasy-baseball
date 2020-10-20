@@ -10,41 +10,165 @@ output:
 
 library(dplyr)
 library(tidyr)
+library(tibble)
+library(stringr)
+library(kableExtra)
+library(knitr)
 
 
 ##############################
 ######## LOADING DATA ########
 ##############################
 
+setwd(dirname(getwd()))
 
+## Clean Data
 
-
+Draft_Results   <- read.csv("data//Clean Data//Draft_Results.csv", stringsAsFactors = FALSE, nrows = 1000)
+Matchups        <- read.csv("data//Clean Data//Matchups.csv", stringsAsFactors = FALSE, nrows = 1000)
+Weekly_Totals   <- read.csv("data//Clean Data//Weekly_Totals.csv", stringsAsFactors = FALSE, nrows = 1000)
+Standings       <- read.csv("data//Clean Data//Standings.csv", stringsAsFactors = FALSE, nrows = 1000)
+Week_19_Rosters <- read.csv("data//Clean Data//Week_19_Rosters.csv", stringsAsFactors = FALSE, nrows = 1000)
+Final_Rosters   <- read.csv("data//Clean Data//Final_Rosters.csv", stringsAsFactors = FALSE, nrows = 1000)
+  
 ```
 
 # Data & Web Scrapers
 
 ### Introduction
 
-I’ve been playing in a fantasy baseball league with some college friends for several years and have generally done pretty well. But in 2018, rather than doing normal preparation and research ahead of the draft, I decided to take a deeper dive and analyze some fantasy baseball data that I scraped from ESPN.
+I’ve been playing in a fantasy baseball league with some college friends for several years and have generally done pretty well. But in 2018, rather than doing my normal draft prep and research, I decided to take a deeper dive and analyze some fantasy baseball data that I scraped from ESPN.
 
 
 ### Web Scrapers
 
-For this project, I scraped data from ESPN and Baseball Reference. I'm not going to walkthrough the code, but scraping scripts can be found in my [github repo](https://github.com/jason-hanser/fantasy-baseball/tree/main/1%20-%20Scraping%20and%20Cleaning) if you are interested. 
+For this project, I scraped data from ESPN and Baseball Reference. I'm not going to walk through the code (there is a lot of it), but scraping scripts can be found in my [github repo](https://github.com/jason-hanser/fantasy-baseball/tree/main/1%20-%20Scraping%20and%20Cleaning), if you are interested. Because of the format of my league,  I only scraped data from standard, ten team, head-to-head, categories-based leagues. 
 
-NOTE: The scrapers were built in early-2018 and may not function properly today. 
+NOTE: The scrapers were built in early-2018 and may no longer function properly. 
 
 ### Data
 
-Below is a summary of the raw and cleaned data that I collected. Within my [github repo](https://github.com/jason-hanser/fantasy-baseball/tree/main/1%20-%20Scraping%20and%20Cleaning), you can find the script I used to clean the data. 
+Below is a summary of the raw and cleaned data that I collected. All of the data, raw and clean, can be viewed and downloaded from [dropbox](https://www.dropbox.com/home/Public%20Data/Fantasy%20Baseball%20Data). And, within my [github repo](https://github.com/jason-hanser/fantasy-baseball/tree/main/1%20-%20Scraping%20and%20Cleaning), you can find the script I used to clean the data. 
 
 #### Raw Data
 
+The nine tables below are data scraped from the ESPN:
+
+* **Leagues** - A table containing public, ESPN fantasy baseball leagues from the 2017 season, including details about the size and format of each league.
+* **League Index** - A table containing the competitiveness of each league (i.e. league index). League index is a uniformly distributed variable, presumably a percentile rank. 
+* **League Winners** - A table containing the name of team within each league that won the  championship. 
+* **Matchups** - A table containing the weekly totals for each match-up of each team as well as the name of the opposing team. 
+* **Matchup Dates** - A small table containing the start and end dates of each match-up. 
+* **AB_IP** - A table containing the number of at-bats and innings pitched during a match-up for each team. 
+* **Draft Results** - A table containing the draft results for each league, including the draft position of players taken by each team.
+* **Final Rosters** - A table containing the roster of each team at the end of the season.  
+* **Week 19 Rosters** - A table contain the roster of each team at the end of Week 19. Teams often cannibalize their rosters at the end of the season in a last ditch effort to win, so the final roster is not always reflective of their final roster. 
+
+The two tables below are data scraped from Baseball Reference:
+
+* **Pitcher Game Logs** - Game logs of all MLB pitchers for the 2017 season,
+* **Batter Game Logs ** - Game logs of all MLB batters for the 2017 season.
+
+And, finally:
+
+* **Player IDs** - A table containing all of the players within the ESPN and Baseball Reference universes for 2017. This file is used a cross-walk in order to join data from the different sources.
 
 
 #### Clean Data
 
+The tables below show the first 1,000 rows of each cleaned data file. 
 
+**Draft Results**
 
+<br>
+``` {r, echo = FALSE}
+
+kable(x = Draft_Results,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
+
+**Macth-Ups**
+
+<br>
+``` {r, echo = FALSE}
+
+kable(x = Matchups,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
+
+**Standings**
+
+Contains the weekly standings for each league based on the match-up data. 
+
+<br>
+``` {r, echo = FALSE}
+
+kable(x = Standings,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
+
+**Week 19 Rosters**
+
+<br>
+``` {r, echo = FALSE}
+
+kable(x = Week_19_Rosters,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
+
+**Final Rosters**
+
+<br>
+``` {r, echo = FALSE}
+
+kable(x = Final_Rosters,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
+
+**Weekly Totals** 
+
+Contains the weekly totals of each player, based on Baseball Reference data.
+
+<br>
+``` {r, echo = FALSE}
+
+kable(x = Weekly_Totals,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
 
 ### Final Remarks
+
+This was one of the first major web scraping projects I ever undertook. In a few cases, the web scraper returned incomplete or improperly formatted data. Rather than attempting to re-scrape the data from these leagues, I removed those leagues from the dataset. As such, the final dataset contains only those leagues for which I was able to accurately scrape all data, some five thousand plus leagues.
+
+<br>
+<br>

@@ -285,6 +285,5 @@ I didn't address this above, but the likelihood of winning a category in a given
 
 Additionally, this analysis and the proposed weekly totals needed to advance to the playoffs assume a balanced team composition. That is, a team were you are equally as likely to win each category. However, teams are rarely perfectly balanced and team owners may even strategically lose or "punt" certain categories. Obviously, in those cases, teams would make up the difference in the other categories. But, this analysis is a starting a point and will serve as a foundation for future analyses.
 
-
-
-
+<br>
+<br>
