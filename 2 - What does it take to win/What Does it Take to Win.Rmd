@@ -1,0 +1,294 @@
+---
+output: 
+  html_document:
+    theme: default
+    highlight: haddock
+    df_print: tibble
+---
+
+``` {r echo = FALSE, message = FALSE, warning = FALSE}
+
+library(dplyr)
+library(tidyr)
+library(stringr)
+library(ggplot2)
+
+##############################
+######## LOADING DATA ########
+##############################
+
+setwd(dirname(getwd()))
+
+standings <- read.csv("data//Clean Data//Standings.csv", stringsAsFactors = FALSE)
+matchups  <- read.csv("data//Clean Data//Matchups.csv", stringsAsFactors = FALSE)
+
+
+###############################
+######## DATA CLEANING ########
+###############################
+
+## tidying matchup data
+
+matchups %>%
+  gather("Category", "Value", c(7:11, 13:17)) %>%
+  mutate(Category = factor(Category, 
+                           c("R", "RBI", "HR", "SB", "AVG", "K", "W", "SV", "ERA", "WHIP"))
+         )-> matchups
+
+
+## who won each category for a given week
+
+matchups %>%
+  select(League_ID,
+         Week_ID,
+         Team_ID,
+         Category, 
+         Value) %>%
+  rename(Opponent_ID    = Team_ID,
+         Opponent_Value = Value) %>%
+  left_join(x = matchups,
+            by = c("League_ID", "Week_ID", "Opponent_ID", "Category")) %>%
+  mutate(Win = case_when(Category  %in% c("WHIP", "ERA") & Value < Opponent_Value ~ 1,
+                         !Category %in% c("WHIP", "ERA") & Value > Opponent_Value ~ 1,
+                         TRUE ~ 0)) %>%
+  select(-Opponent_Value) -> matchups
+
+## filtering standings 
+
+standings %>%
+    filter(League_Index >= 0.25,
+           League_Index <= 0.75) -> standings
+
+###############################
+######## DATA ANALYSIS ########
+###############################
+
+## What do you need in terms of an overall record
+
+standings %>%
+  filter(Week_ID == 21) %>%
+  glm(formula = as.factor(Rank <= 4) ~ PCT,
+      family  = "binomial") %>%
+  coef() -> temp_coefs
+
+prob_95 <- (log(.95/(1-.95)) - temp_coefs[[1]])/temp_coefs[[2]]
+
+
+## What do you need in terms of weekly individual category totals
+
+coefs_category <- data.frame()
+
+for (i in sort(unique(matchups$Category))) {
+   
+  matchups %>%
+    mutate(Value = ifelse(is.infinite(Value), 999, Value)) %>%
+    filter(Category == i) %>%
+    glm(formula = Win ~ Value,
+        family  = "binomial") %>%
+    coef() -> temp_coefs
+   
+  temp_coefs <- data.frame(Category   = i,
+                           prob_95    = prob_95,
+                           coef_Int   = temp_coefs[[1]],
+                           coef_Value = temp_coefs[[2]])
+  
+  coefs_category <- rbind(coefs_category, 
+                          temp_coefs)
+   
+}
+rm(i, temp_coefs)
+
+
+
+####################################
+######## DATA VISUALIZATION ########
+####################################
+
+## Batting Categories
+
+matchups %>%
+  left_join(y  = coefs_category,
+            by = c("Category")) %>%
+  filter(Value >= (log(.001/(1-.001)) - coef_Int)/coef_Value,
+         Value <= (log(.999/(1-.999)) - coef_Int)/coef_Value) %>%
+  mutate(Point = (log(prob_95/(1-prob_95)) - coef_Int)/coef_Value) %>%
+  filter(Category %in% c("R", "RBI", "HR", "SB", "AVG")) %>%
+  ggplot() +
+    geom_smooth(aes(x = Value,
+                    y = Win),
+                method = "glm",
+                method.args = list(family = "binomial"),
+                se    = FALSE,
+                color = "black",
+                lwd   = 1) +
+    geom_point(data = coefs_category[coefs_category$Category %in% c("R", "RBI", "HR", "SB", "AVG"),],
+               aes(y = prob_95, 
+                   x = (log(prob_95/(1-prob_95)) - coef_Int)/coef_Value),
+               color = "red",
+               size  = 2) + 
+    geom_text(data = coefs_category[coefs_category$Category %in% c("R", "RBI", "HR", "SB", "AVG"),],
+              aes(y = prob_95, 
+                  x = (log(.45/(1-.45)) - coef_Int)/coef_Value,
+                  label = case_when(Category == "AVG" ~ round((log(prob_95/(1-prob_95)) - coef_Int)/coef_Value, 3),
+                                    TRUE ~ round((log(prob_95/(1-prob_95)) - coef_Int)/coef_Value, 1))),
+              color = "red",
+              hjust = 1) + 
+    scale_y_continuous(name   = "Probability of Winning",
+                       labels = scales::percent_format(1),
+                       minor_breaks = FALSE) +
+    scale_x_continuous(name = NULL,
+                       minor_breaks = FALSE) +
+    facet_grid(.~Category,
+               scales   = "free") +
+    theme(axis.ticks = element_blank()) -> plot_1
+
+
+## Pitching Categories
+
+matchups %>%
+  left_join(y  = coefs_category,
+            by = c("Category")) %>%
+  filter(ifelse(Category %in% c("ERA", "WHIP"), 
+                Value <= (log(.001/(1-.001)) - coef_Int)/coef_Value,
+                Value >= (log(.001/(1-.001)) - coef_Int)/coef_Value),
+         ifelse(Category %in% c("ERA", "WHIP"), 
+                Value >= (log(.999/(1-.999)) - coef_Int)/coef_Value,
+                Value <= (log(.999/(1-.999)) - coef_Int)/coef_Value)) %>%
+  mutate(Point = (log(prob_95/(1-prob_95)) - coef_Int)/coef_Value) %>%
+  filter(Category %in% c("K", "W", "SV", "ERA", "WHIP")) %>%
+  ggplot() +
+    geom_smooth(aes(x = Value,
+                    y = Win),
+                method = "glm",
+                method.args = list(family = "binomial"),
+                se    = FALSE,
+                color = "black",
+                lwd   = 1) +
+    geom_point(data = coefs_category[coefs_category$Category %in% c("K", "W", "SV", "ERA", "WHIP"),],
+               aes(y = prob_95, 
+                   x = (log(prob_95/(1-prob_95)) - coef_Int)/coef_Value),
+               color = "red",
+               size  = 2) + 
+    geom_text(data = coefs_category[coefs_category$Category %in% c("K", "W", "SV", "ERA", "WHIP"),],
+              aes(y = prob_95, 
+                  x = case_when(Category %in% c("ERA", "WHIP") ~ (log(.65/(1-.65)) - coef_Int)/coef_Value,
+                                TRUE ~ (log(.45/(1-.45)) - coef_Int)/coef_Value),
+                  label = case_when(Category %in% c("ERA", "WHIP") ~ round((log(prob_95/(1-prob_95)) - coef_Int)/coef_Value, 2),
+                                    TRUE ~ round((log(prob_95/(1-prob_95)) - coef_Int)/coef_Value, 1))),
+              color = "red",
+              hjust = 1) + 
+    scale_y_continuous(name   = "Probability of Winning",
+                       labels = scales::percent_format(1),
+                       minor_breaks = FALSE) +
+    scale_x_continuous(name = NULL,
+                       minor_breaks = FALSE) +
+    facet_grid(.~Category,
+               scales   = "free") +
+    theme(axis.ticks = element_blank()) -> plot_2
+
+
+```
+
+
+# What does it take to win?
+
+### Introduction
+
+A standard, head-to-head categories league on ESPN consists of ten teams competing against one another over the course of a twenty one week season. Each week, teams are pitted against another team in a head-to-head match where they vie for ten points (or “wins”). The stats accrued during the week by the players on each teams’ roster are used to allocate the points for that week. Teams win a point for each category in which they best their opponent. There are five batting categories (Runs, RBIs, Home Runs, Stolen Based, and Batting Average) and five pitching categories (Strikeouts, Wins, Saves, ERA, and WHIP). At the end of the regular season, the four teams with the best record advance to playoff bracket.
+
+I’ve been playing in a league with some college friends for several years and have generally done pretty well. But this year, rather than doing normal preparation and research ahead of the draft, I decided to take a deeper dive and analyze some fantasy baseball data that I scraped from ESPN.
+
+
+
+### Project Overview 
+
+The goal of this project is determine what a team needs in order to win. That is, how many games does a team need to win in order to advance to the playoffs? And, what sort of weekly totals does a team need in order to win that many games?
+
+
+### How many games do you need to make the playoffs?
+
+Obviously the goal is to win the championship. But, the playoff bracket can be unpredictable as injuries mount, ace pitchers blow easy games, and older players are shut down so that they can heal. In truth, the team with best record at the end of the season only wins the championship `r scales::percent(mean(standings[standings$Week_ID == 21 & standings$Rank == 1, "Winner"]))` of the time. And, while those are decent odds, it’s not a sure thing. So my goal is never to be best team, but rather just good enough to make it into the playoffs.*
+
+NOTE: This is also because I play in a “keeper” league where you are able to retain some of your players from year-to-year. Because of this format, I have to balance the current season performance against future season performance, which is another reason I worry too much about having the best record in any given year (i.e. don’t mortgage the future).
+
+In the code below, we calculate the odds of making the playoffs based on the each team’s record at the end of the regular season.
+
+
+``` {r warning = FALSE, attr.source = ".numberLines", eval = FALSE}
+
+## Overall record
+
+standings %>%
+  filter(Week_ID == 21) %>%
+  glm(formula = as.factor(Rank <= 4) ~ PCT,
+      family  = "binomial") %>%
+  coef() -> temp_coefs
+
+prob_95 <- (log(.95/(1-.95)) - temp_coefs[[1]])/temp_coefs[[2]]
+
+```
+
+Doing this, we can determine that in order to have a 95% of advancing to playoffs, a team need's a winning percentage of `r scales::percent(prob_95, 0.1)` --- or roughly `r round(prob_95*210, 0)` points on the season. 
+
+
+### What do you need for each category?
+
+In order to have a winning percentage of `r scales::percent(prob_95, 0.1)`, you need win each category `r scales::percent(prob_95, 0.1)` of the time. 
+
+Below, for each category, we fit a logistic regression model to the weekly match-up data, which gives us the likelihood that a team will win the category based on their weekly total for that category. Then, we extract the coefficients for each fit, which we can calculate the weekly total needed to give us a `r scales::percent(prob_95, 0.1)` chance of winning that category.
+
+``` {r warning = FALSE, attr.source = ".numberLines", eval = FALSE}
+
+## Individual categories
+
+coefs_category <- data.frame()
+
+for (i in sort(unique(matchups$Category))) {
+   
+  matchups %>%
+    mutate(Value = ifelse(is.infinite(Value), 999, Value)) %>%
+    filter(Category == i) %>%
+    glm(formula = Win ~ Value,
+        family  = "binomial") %>%
+    coef() -> temp_coefs
+   
+  temp_coefs <- data.frame(Category   = i,
+                           prob_95    = prob_95,
+                           coef_Int   = temp_coefs[[1]],
+                           coef_Value = temp_coefs[[2]])
+  
+  coefs_category <- rbind(coefs_category, 
+                          temp_coefs)
+   
+}
+
+```
+
+Below, we graphed the relationship between the weekly total for each of the batting categories and the probability of winning each category. The red dot and text show the total needed to have a `r scales::percent(prob_95, 0.1)` chance of winning the category in a given week. 
+
+``` {r echo = FALSE, message = FALSE, fig.width = 9, fig.height = 2.75, fig.align = "center"}
+
+plot_1
+
+
+```
+
+
+And, for pitching categories:
+
+``` {r echo = FALSE, message = FALSE, fig.width = 9, fig.height = 2.75, fig.align = "center"}
+
+plot_2
+
+```
+
+
+### Final Remarks
+
+I didn't address this above, but the likelihood of winning a category in a given week also depends on competitiveness of a league. In less competitive leagues, you'll need fewer runs, home runs, strike outs, saves, and so on. Here, I limited the analysis to leagues between the 25th and 75th percentiles in terms of league competitiveness. 
+
+Additionally, this analysis and the proposed weekly totals needed to advance to the playoffs assume a balanced team composition. That is, a team were you are equally as likely to win each category. However, teams are rarely perfectly balanced and team owners may even strategically lose or "punt" certain categories. Obviously, in those cases, teams would make up the difference in the other categories. But, this analysis is a starting a point and will serve as a foundation for future analyses.
+
+
+
+
