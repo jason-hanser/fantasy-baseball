@@ -196,9 +196,9 @@ matchups %>%
 
 A standard, head-to-head categories league on ESPN consists of ten teams competing against one another over the course of a twenty one week season. Each week, teams are pitted against another team in a head-to-head match where they vie for ten points (or “wins”). The stats accrued during the week by the players on each teams’ roster are used to allocate the points for that week. Teams win a point for each category in which they best their opponent. There are five batting categories (Runs, RBIs, Home Runs, Stolen Based, and Batting Average) and five pitching categories (Strikeouts, Wins, Saves, ERA, and WHIP). At the end of the regular season, the four teams with the best record advance to playoff bracket.
 
-I’ve been playing in a league with some college friends for several years and have generally done pretty well. But this year, rather than doing normal preparation and research ahead of the draft, I decided to take a deeper dive and analyze some fantasy baseball data that I scraped from ESPN.
+Obviously the goal is to win the championship. But, the playoff bracket can be unpredictable as injuries mount, ace pitchers blow easy games, and older players are shut down so that they can heal. In truth, the team with best record at the end of the season only wins the championship `r scales::percent(mean(standings[standings$Week_ID == 21 & standings$Rank == 1, "Winner"]))` of the time. And, while those are decent odds, it’s not a sure thing. As a such, my goal is just to make the playoffs, rather than obsessing about being the best team at the end of the regular season.*
 
-
+NOTE: This is also because I play in a “keeper” league where you are able to retain some of your players from year-to-year. Because of this format, I have to balance the current season performance against future season performance, which is another reason I worry too much about having the best record in any given year (i.e. don’t mortgage the future).
 
 ### Project Overview 
 
@@ -206,10 +206,6 @@ The goal of this project is determine what a team needs in order to win. That is
 
 
 ### How many games do you need to make the playoffs?
-
-Obviously the goal is to win the championship. But, the playoff bracket can be unpredictable as injuries mount, ace pitchers blow easy games, and older players are shut down so that they can heal. In truth, the team with best record at the end of the season only wins the championship `r scales::percent(mean(standings[standings$Week_ID == 21 & standings$Rank == 1, "Winner"]))` of the time. And, while those are decent odds, it’s not a sure thing. So my goal is never to be best team, but rather just good enough to make it into the playoffs.*
-
-NOTE: This is also because I play in a “keeper” league where you are able to retain some of your players from year-to-year. Because of this format, I have to balance the current season performance against future season performance, which is another reason I worry too much about having the best record in any given year (i.e. don’t mortgage the future).
 
 In the code below, we calculate the odds of making the playoffs based on the each team’s record at the end of the regular season.
 

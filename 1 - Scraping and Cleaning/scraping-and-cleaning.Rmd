@@ -1,0 +1,50 @@
+---
+output: 
+  html_document:
+    theme: default
+    highlight: haddock
+    df_print: tibble
+---
+
+``` {r message = FALSE, echo = FALSE}
+
+library(dplyr)
+library(tidyr)
+
+
+##############################
+######## LOADING DATA ########
+##############################
+
+
+
+
+```
+
+# Data & Web Scrapers
+
+### Introduction
+
+I’ve been playing in a fantasy baseball league with some college friends for several years and have generally done pretty well. But in 2018, rather than doing normal preparation and research ahead of the draft, I decided to take a deeper dive and analyze some fantasy baseball data that I scraped from ESPN.
+
+
+### Web Scrapers
+
+For this project, I scraped data from ESPN and Baseball Reference. I'm not going to walkthrough the code, but scraping scripts can be found in my [github repo](https://github.com/jason-hanser/fantasy-baseball/tree/main/1%20-%20Scraping%20and%20Cleaning) if you are interested. 
+
+NOTE: The scrapers were built in early-2018 and may not function properly today. 
+
+### Data
+
+Below is a summary of the raw and cleaned data that I collected. Within my [github repo](https://github.com/jason-hanser/fantasy-baseball/tree/main/1%20-%20Scraping%20and%20Cleaning), you can find the script I used to clean the data. 
+
+#### Raw Data
+
+
+
+#### Clean Data
+
+
+
+
+### Final Remarks
