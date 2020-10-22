@@ -30,9 +30,13 @@ matchups  <- read.csv("data//Clean Data//Matchups.csv", stringsAsFactors = FALSE
 ## tidying matchup data
 
 matchups %>%
+  filter(League_Index >= 0.25,
+         League_Index <= 0.75,
+         Week_ID      <= 21) %>%
   gather("Category", "Value", c(7:11, 13:17)) %>%
-  mutate(Category = factor(Category, 
-                           c("R", "RBI", "HR", "SB", "AVG", "K", "W", "SV", "ERA", "WHIP"))
+  mutate(Category   = factor(Category, 
+                             c("R", "RBI", "HR", "SB", "AVG", "K", "W", "SV", "ERA", "WHIP")),
+         Match_Type = ifelse(Week_ID == 14, "All-Star", "Regular")
          )-> matchups
 
 
@@ -57,7 +61,10 @@ matchups %>%
 
 standings %>%
     filter(League_Index >= 0.25,
-           League_Index <= 0.75) -> standings
+           League_Index <= 0.75,
+           Week_ID      == 21) -> standings
+
+
 
 ###############################
 ######## DATA ANALYSIS ########
@@ -66,7 +73,6 @@ standings %>%
 ## What do you need in terms of an overall record
 
 standings %>%
-  filter(Week_ID == 21) %>%
   glm(formula = as.factor(Rank <= 4) ~ PCT,
       family  = "binomial") %>%
   coef() -> temp_coefs
@@ -79,24 +85,48 @@ prob_95 <- (log(.95/(1-.95)) - temp_coefs[[1]])/temp_coefs[[2]]
 coefs_category <- data.frame()
 
 for (i in sort(unique(matchups$Category))) {
-   
+
+  ## for regular matchs
+  
   matchups %>%
+    filter(Match_Type == "Regular",
+           Category   == i) %>%
     mutate(Value = ifelse(is.infinite(Value), 999, Value)) %>%
-    filter(Category == i) %>%
     glm(formula = Win ~ Value,
         family  = "binomial") %>%
-    coef() -> temp_coefs
+    coef() -> temp_coefs_regular
    
-  temp_coefs <- data.frame(Category   = i,
-                           prob_95    = prob_95,
-                           coef_Int   = temp_coefs[[1]],
-                           coef_Value = temp_coefs[[2]])
+  temp_coefs_regular <- data.frame(Category   = i,
+                                   Match_Type = "Regular",
+                                   prob_95    = prob_95,
+                                   coef_Int   = temp_coefs_regular[[1]],
+                                   coef_Value = temp_coefs_regular[[2]])
+  
+  ## for the all-star break
+  
+  matchups %>%
+    filter(Match_Type == "All-Star",
+           Category   == i) %>%
+    mutate(Value = ifelse(is.infinite(Value), 999, Value)) %>%
+    glm(formula = Win ~ Value,
+        family  = "binomial") %>%
+    coef() -> temp_coefs_allstar
+   
+  temp_coefs_allstar <- data.frame(Category   = i,
+                                   Match_Type = "All-Star",
+                                   prob_95    = prob_95,
+                                   coef_Int   = temp_coefs_allstar[[1]],
+                                   coef_Value = temp_coefs_allstar[[2]])
+  
+  
+  ## joining data
   
   coefs_category <- rbind(coefs_category, 
-                          temp_coefs)
+                          temp_coefs_regular,
+                          temp_coefs_allstar)
    
 }
-rm(i, temp_coefs)
+rm(i, temp_coefs_regular, temp_coefs_allstar)
 
 
 
@@ -116,8 +146,9 @@ coefs_category %>%
 ## Batting Categories
 
 matchups %>%
+  filter(Match_Type == "Regular") %>%
   left_join(y  = coefs_category,
-            by = c("Category")) %>%
+            by = c("Category", "Match_Type")) %>%
   filter(Value >= (log(.001/(1-.001)) - coef_Int)/coef_Value,
          Value <= (log(.999/(1-.999)) - coef_Int)/coef_Value) %>%
   mutate(Point = (log(prob_95/(1-prob_95)) - coef_Int)/coef_Value) %>%
@@ -130,12 +161,12 @@ matchups %>%
                 se    = FALSE,
                 color = "black",
                 lwd   = 1) +
-    geom_point(data = coefs_category[coefs_category$Category %in% c("R", "RBI", "HR", "SB", "AVG"),],
+    geom_point(data = coefs_category[coefs_category$Category %in% c("R", "RBI", "HR", "SB", "AVG") & coefs_category$Match_Type == "Regular",],
                aes(y = prob_95, 
                    x = (log(prob_95/(1-prob_95)) - coef_Int)/coef_Value),
                color = "red",
                size  = 2) + 
-    geom_text(data = coefs_category[coefs_category$Category %in% c("R", "RBI", "HR", "SB", "AVG"),],
+    geom_text(data = coefs_category[coefs_category$Category %in% c("R", "RBI", "HR", "SB", "AVG") & coefs_category$Match_Type == "Regular",],
               aes(y = prob_95, 
                   x = (log(.45/(1-.45)) - coef_Int)/coef_Value,
                   label = case_when(Category == "AVG" ~ round((log(prob_95/(1-prob_95)) - coef_Int)/coef_Value, 3),
@@ -155,8 +186,9 @@ matchups %>%
 ## Pitching Categories
 
 matchups %>%
+  filter(Match_Type == "Regular") %>%
   left_join(y  = coefs_category,
-            by = c("Category")) %>%
+            by = c("Category", "Match_Type")) %>%
   filter(ifelse(Category %in% c("ERA", "WHIP"), 
                 Value <= (log(.001/(1-.001)) - coef_Int)/coef_Value,
                 Value >= (log(.001/(1-.001)) - coef_Int)/coef_Value),
@@ -173,12 +205,12 @@ matchups %>%
                 se    = FALSE,
                 color = "black",
                 lwd   = 1) +
-    geom_point(data = coefs_category[coefs_category$Category %in% c("K", "W", "SV", "ERA", "WHIP"),],
+    geom_point(data = coefs_category[coefs_category$Category %in% c("K", "W", "SV", "ERA", "WHIP") & coefs_category$Match_Type == "Regular",],
                aes(y = prob_95, 
                    x = (log(prob_95/(1-prob_95)) - coef_Int)/coef_Value),
                color = "red",
                size  = 2) + 
-    geom_text(data = coefs_category[coefs_category$Category %in% c("K", "W", "SV", "ERA", "WHIP"),],
+    geom_text(data = coefs_category[coefs_category$Category %in% c("K", "W", "SV", "ERA", "WHIP") & coefs_category$Match_Type == "Regular",],
               aes(y = prob_95, 
                   x = case_when(Category %in% c("ERA", "WHIP") ~ (log(.65/(1-.65)) - coef_Int)/coef_Value,
                                 TRUE ~ (log(.45/(1-.45)) - coef_Int)/coef_Value),
@@ -242,6 +274,8 @@ In order to have a winning percentage of `r scales::percent(prob_95, 0.1)`, you 
 
 Below, for each category, we fit a logistic regression model to the weekly match-up data, which gives us the likelihood that a team will win the category based on their weekly total for that category. Then, we extract the coefficients for each fit, which we can calculate the weekly total needed to give us a `r scales::percent(prob_95, 0.1)` chance of winning that category.
 
+NOTE: In the code below, you'll notice that we only fit a logistic regression model for "Regular" matches. Match-ups that occur during the all-star break --- in early July --- are longer than normal matches. As a result, the totals needed to win during the all-star break are different than the total needed to win a typical week. For the purposes of this analysis, I am only interested in the totals needed for a typical week.
+
 ``` {r warning = FALSE, attr.source = ".numberLines", eval = FALSE}
 
 ## Individual categories
@@ -249,27 +283,33 @@ Below, for each category, we fit a logistic regression model to the weekly match
 coefs_category <- data.frame()
 
 for (i in sort(unique(matchups$Category))) {
-   
+
+  ## for regular matchs
+  
   matchups %>%
+    filter(Match_Type == "Regular",
+           Category   == i) %>%
     mutate(Value = ifelse(is.infinite(Value), 999, Value)) %>%
-    filter(Category == i) %>%
     glm(formula = Win ~ Value,
         family  = "binomial") %>%
-    coef() -> temp_coefs
+    coef() -> temp_coefs_regular
    
-  temp_coefs <- data.frame(Category   = i,
-                           prob_95    = prob_95,
-                           coef_Int   = temp_coefs[[1]],
-                           coef_Value = temp_coefs[[2]])
+  temp_coefs_regular <- data.frame(Category   = i,
+                                   Match_Type = "Regular",
+                                   prob_95    = prob_95,
+                                   coef_Int   = temp_coefs_regular[[1]],
+                                   coef_Value = temp_coefs_regular[[2]])
+  
+  ## joining data
   
   coefs_category <- rbind(coefs_category, 
-                          temp_coefs)
+                          temp_coefs_regular)
    
 }
 
 ```
 
-Below, we graphed the relationship between the weekly total for each of the batting categories and the probability of winning each category. The red dot and text show the total needed to have a `r scales::percent(prob_95, 0.1)` chance of winning the category in a given week. 
+Below, we graphed the relationship between the weekly total for each of the batting categories and the probability of winning each category for a typical week. The red dot and text show the total needed to have a `r scales::percent(prob_95, 0.1)` chance of winning the category in a given week. 
 
 ``` {r echo = FALSE, message = FALSE, fig.width = 9, fig.height = 2.75, fig.align = "center"}
 
