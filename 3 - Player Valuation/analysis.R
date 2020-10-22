@@ -162,7 +162,6 @@ player_value %>%
   summarise(avg_Wins = mean(Wins)) %>%
   ungroup() -> temp_replacements
 
-
 ## Getting list of replacement level players (top 25 P/B outside of the top 250 players)
 
 temp_replacements %>%

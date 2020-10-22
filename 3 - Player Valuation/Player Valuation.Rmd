@@ -6,20 +6,143 @@ output:
     df_print: tibble
 ---
 
-```{r echo = FALSE, message = FALSE}
+```{r, echo = FALSE, message = FALSE}
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+##############################
+######## LOADING DATA ########
+##############################
+
+player_value <- read.csv("output//player_value.csv", stringsAsFactors = FALSE)
+
+
+####################################
+######## DATA VISUALIZATION ########
+####################################
+
+
+
+
 
 ```
 
 # Player Valuation
 
+### Introduction
+
+Perhaps not surprisingly, I am huge fan of the [sabermetric revolution](https://en.wikipedia.org/wiki/Sabermetrics) within baseball (shocking, I know). And, after figuring out the weekly totals needed to ensure a playoff spot, I decided to see if I could devise a method for evaluating a player's performance. 
+
+
+### Project Overview
+
+The goal of this project to devise a method of evaluating the performance of a player, such that the resulting metric should be:
+
+* **Intuitive** - Wins (i.e. category points) are the currency of a head-to-head categories league, so the metric should attempt to approximate the number of additional wins a team would gain by having a player on a roster. 
+* **Relative to some baseline performance** - In fantasy baseball leagues, team owners can pick up players from the free agency to replace players on their roster. As a result, the metric should be relative to a baseline performance, similar to [Wins Above Replacement (WAR)](https://en.wikipedia.org/wiki/Wins_Above_Replacement).  
+* **Based on weekly performance** - The relationship between the weekly totals and the probability of winning a category in a given week exhibits a strong S-shaped curve. As such, players with streaky week-to-week performance won’t win you as many point as a player who puts up similar number, but is more consistent. So the metric should be based on weekly performance, rather than season totals.
+* **Based on an average, balance team** - The true value of a player depends on the composition of a team. Paul Goldschmidt is going to add a lot of value to a team that is already stacked with power hitters; nor would he win you a lot of points if your team consisted of only slap hitting, speedsters. To get around this complication, we will assume the team composition has a 50% chance of winning each category when considering a player's contribution 
+
+
+### Methods
 
 
 
 
+``` {r, eval = FALSE, attr.source = ".numberLines"}
+
+## getting raw change in win probability (i.e. Wins)
+
+totals_batters %>%
+  mutate(prob_50   = -coef_Int/coef_Value,
+         new_total = case_when(Category == "AVG" ~ (prob_50*avg_AB + H)/(avg_AB + AB), 
+                               TRUE ~ prob_50+Total),
+         new_prob  = 1/(1+exp(-(coef_Value*new_total + coef_Int))),
+         Wins      = new_prob - 0.5
+         ) -> totals_batters
+
+totals_pitchers %>%
+  mutate(prob_50   = -coef_Int/coef_Value,
+         new_total = case_when(Category == "ERA"  ~ (prob_50/9*avg_IP + ER)/(avg_IP + IP)*9, 
+                               Category == "WHIP" ~ (prob_50*avg_IP + BR)/(avg_IP + IP),
+                               TRUE ~ prob_50+Total),
+         new_prob  = 1/(1+exp(-(coef_Value*new_total + coef_Int))),
+         Wins      = new_prob - 0.5
+         ) -> totals_pitchers
+
+```
+
+
+#### Replacement Level Performance
+
+After calculating players' raw performance, we need to
+
+In the code below, we calculate 
+
+In a ten team league, there are 25o rosters spots, not counting DL slots, 
+
+``` {r, eval = FALSE, attr.source = ".numberLines"}
+
+## Getting average weekly wins per player
+
+player_value %>%
+  filter(Games > 0) %>%
+  group_by(Player_ID,
+           Player,
+           Role,
+           Week_ID) %>%
+  summarise(Wins = sum(Wins)) %>%
+  group_by(Player_ID,
+           Player,
+           Role) %>%
+  summarise(avg_Wins = mean(Wins)) %>%
+  ungroup() -> temp_replacements
+
+## Getting list of replacement level players (top 25 P/B outside of the top 250 players)
+
+temp_replacements %>%
+  arrange(desc(avg_Wins)) %>%
+  filter(row_number() > 250) %>%
+  group_by(Role) %>%
+  top_n(n  = 25,
+        wt = avg_Wins) -> temp_replacements
+
+```
+
+
+test teeest etset
+
+``` {r, eval = FALSE, attr.source = ".numberLines"}
+
+## Getting average weekly Wins for each category of replacement level players
+
+player_value %>%
+  filter(Player_ID %in% temp_replacements$Player_ID,
+         Games > 0) %>%
+  group_by(Match_Type,
+           Role,
+           Category) %>%
+  summarise(r_Wins = mean(Wins)) -> temp_replacements
+
+## Substracting replacement level performance from raw Wins
+
+player_value %>%
+  left_join(y  = temp_replacements,
+            by = c("Match_Type", "Role", "Category")) %>%
+  mutate(WAR = ifelse(Games == 0, 0, Wins - r_Wins)) %>%
+  select(-r_Wins) -> player_value
+
+```
+
+
+### Results
+
+
+### Final Remarks
 
 
 
-
-
-
-
+<br>
+<br>
