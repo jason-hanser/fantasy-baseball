@@ -6,11 +6,13 @@ output:
     df_print: tibble
 ---
 
-```{r, echo = FALSE, message = FALSE}
+```{r, echo = FALSE, message = FALSE, warning = FALSE}
 
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(knitr)
+library(kableExtra)
 
 ##############################
 ######## LOADING DATA ########
@@ -19,11 +21,108 @@ library(ggplot2)
 player_value <- read.csv("output//player_value.csv", stringsAsFactors = FALSE)
 
 
+########################################
+######## DATA CLEANING/ANALYSIS ########
+########################################
+
+## Getting average weekly wins per player
+
+player_value %>%
+  filter(Games > 0) %>%
+  group_by(Player_ID,
+           Player,
+           Role,
+           Week_ID) %>%
+  summarise(Wins = sum(Wins)) %>%
+  group_by(Player_ID,
+           Player,
+           Role) %>%
+  summarise(avg_Wins = mean(Wins)) %>%
+  ungroup() -> temp_replacements
+
+## Getting list of replacement level players (top 25 P/B outside of the top 250 players)
+
+temp_replacements %>%
+  arrange(desc(avg_Wins)) %>%
+  filter(row_number() > 250) %>%
+  group_by(Role) %>%
+  top_n(n  = 25,
+        wt = avg_Wins) -> temp_replacements
+
+
 ####################################
 ######## DATA VISUALIZATION ########
 ####################################
 
+## WAR on the season
 
+player_value %>%
+  group_by(Player_ID,
+           Player,
+           Role,
+           Category) %>%
+  summarise(category_WAR = round(sum(WAR), 3)) %>%
+  group_by(Player_ID,
+           Player) %>%
+  mutate(total_WAR = round(sum(category_WAR), 3)) %>%
+  spread(Category,
+         category_WAR) %>%
+  ungroup() %>%
+  arrange(desc(total_WAR)) %>%
+  filter(row_number() <= 250) %>%
+  select(Player,
+         Role,
+         total_WAR,
+         R,
+         RBI,
+         HR,
+         SB,
+         AVG,
+         K,
+         W,
+         SV,
+         ERA,
+         WHIP) %>%
+  mutate_if(is.numeric , 
+            replace_na, 
+            replace = 0) -> WAR_season
+
+
+## WAR on the week
+
+player_value %>%
+  group_by(Player_ID,
+           Player,
+           Role,
+           Week_ID,
+           Category) %>%
+  summarise(category_WAR = round(sum(WAR), 3)) %>%
+  group_by(Player_ID,
+           Player,
+           Week_ID) %>%
+  mutate(total_WAR = round(sum(category_WAR),3)) %>%
+  spread(Category,
+         category_WAR) %>%
+  ungroup() %>%
+  arrange(desc(total_WAR)) %>%
+  filter(row_number() <= 100) %>%
+  select(Player,
+         Role,
+         Week_ID,
+         total_WAR,
+         R,
+         RBI,
+         HR,
+         SB,
+         AVG,
+         K,
+         W,
+         SV,
+         ERA,
+         WHIP) %>%
+  mutate_if(is.numeric , 
+            replace_na, 
+            replace = 0) -> WAR_week
 
 
 
@@ -48,7 +147,9 @@ The goal of this project to devise a method of evaluating the performance of a p
 
 ### Methods
 
+In order to determine a given player's value, we need to calculate the raw change in win probability for each category based on the weekly totals of a player. That is, if you were to add a player's totals for a week to an average team, how would the odds of winning each category change. 
 
+In the code below, we accomplish this in four steps. First, we calculate the totals needed to have a 50% chance of winning each category (line 4). This gives us the performance of an average team, satisfying one of our requirements detailed above. Second, we add the totals of a player for a given week to our average team’s weekly totals (line 4). Third, using the re-calculated totals, we calculate the odds of winning each category. And finally, we subtract 0.5 from the new probability of winning each category (line 8), giving us the change in win probabilities (i.e. Wins).
 
 
 ``` {r, eval = FALSE, attr.source = ".numberLines"}
@@ -75,13 +176,13 @@ totals_pitchers %>%
 ```
 
 
-#### Replacement Level Performance
+After calculating players' raw performance, we need to compare it to some baseline in order to make it relative. Borrowing from the concept of [WAR](https://en.wikipedia.org/wiki/Wins_Above_Replacement), I decided to make my player valuation relative to replacement level. 
 
-After calculating players' raw performance, we need to
+In a standard ten team league, there are 250 rosters spots. Assuming that team owners are smart, these spots should be occupied by the best players. So our replacement level players should be pulled from the remaining pool of players and represent the best options available 
 
-In the code below, we calculate 
+In the code chunk below, we calculate the average number of Wins earned by each player in a week. Then, we rank the player by this average and select the fifty best players (25 pitchers and 25 batters) outside of the top 250. These are our replacement level players.
 
-In a ten team league, there are 25o rosters spots, not counting DL slots, 
+Our replacement levels players averaged just `r round(mean(temp_replacements$avg_Wins), 3)` Wins per week and include players such as Neil Walker, Lance Lynn, Kyle Schwarber, and Hunter Pence. That feels about right. 
 
 ``` {r, eval = FALSE, attr.source = ".numberLines"}
 
@@ -111,8 +212,8 @@ temp_replacements %>%
 
 ```
 
+After identifying our replacement level players, I grouped them by role and calculated the average Wins for each category. Then, I joined the these totals to the `player_value` data frame and subtracted them from the Win values of each player, giving us Wins Above Replacement (WAR). 
 
-test teeest etset
 
 ``` {r, eval = FALSE, attr.source = ".numberLines"}
 
@@ -139,9 +240,73 @@ player_value %>%
 
 ### Results
 
+In the table below, you can see the top 250 players in terms of WAR on the season. Paul Goldschmidt's line of 166 runs, 120 RBIs, 36 home runs, 18 stolen bases, and 0.297 batting average tops the chart and was worth --- according to my methodogy --- roughly 9.5 wins above replacement. 
+
+<br>
+``` {r, echo = FALSE}
+
+kable(x = WAR_season,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
+
+
+Since we calculated WAR on a weekly basis, you can also view the results for individual weeks. In the table below, you can see the best 100 weekly performances. In week 13, Mookie Betts was worth 1.4 WAR; pretty impressive considering there are only five batting categories and an average team would win 2.5 of those categories without Mookie. 
+
+<br>
+``` {r, echo = FALSE}
+
+kable(x = WAR_week,
+      row.names = FALSE,
+      format = "html") %>%
+  kable_styling() %>%
+  scroll_box(height  = "200px")
+
+```
+<br>
+
+Finally, the histogram below shows the distribution of season WAR for the top 250 players by role. As you can see, the data exhibit a pretty strong right skew. This isn’t particularly surprising; anyone who has played fantasy baseball could tell you that elite talent is scarce. More surprising is the discrepancy between batters and pitchers. Our player universes contains roughly equal numbers of pitchers and batters, but only forty-eight pitchers appear in the top 250 using my valuation method. And, the best pitcher maxes our around six WAR compared to 10 among batters.
+
+
+
+``` {r echo = FALSE, fig.height = 4, fig.align = "center"}
+
+player_value %>%
+  mutate(Role = case_when(Role == "B" ~ "Batters",
+                          Role == "P" ~ "Pitchers",
+                          TRUE ~ "ERROR")) %>%
+  group_by(Player_ID,
+           Player,
+           Role) %>%
+  summarise(WAR = sum(WAR)) %>%
+  ungroup() %>%
+  top_n(n  = 250,
+        wt = WAR) %>%
+  ggplot() +
+    geom_histogram(aes(x = WAR),
+                   binwidth = 0.5,
+                   fill = "#cf1515",
+                   alpha = 0.9) +
+    scale_y_continuous(name = "Frequency",
+                       minor_breaks = NULL) +
+    scale_x_continuous(name = "Wins Above Replacement (WAR)",
+                       breaks = c(0, 2, 4, 6, 8, 10),
+                       minor_breaks = NULL) +
+    facet_grid(.~Role) +
+    theme(axis.ticks = element_blank())
+
+
+
+
+```
 
 ### Final Remarks
 
+On first glance, the relative of pitchers within the top 250 players is concerning. But this might not be too far off from the truth. While there are roughly the same number of pitchers and batters within our player universe, most of pitchers are middle relief pitchers. These players don't get a ton of winning and rarely earn wins or saves, making them worthless in most fantasy baseball leagues. Pitching performances also tend to be more variable than batting performances. Outside of elite pitchers, it's pretty common for team owners to sit pitchers in unfavorable pitching matchups. But my valuation systems assumes you are starting a pitchers for all of their matchups. Finally, unlike batter, pitchers don't really contribute in all categories. Starting pitchers don't earn saves and closers rarely earn wins. And, because our baseline performance is based on a mix of starting and relief pitchers, starting pitchers are worth negative WAR in the Saves category. Over the course of the season, those negative values add up and explain why pitchers have a lower ceiling than batters.
 
 
 <br>
